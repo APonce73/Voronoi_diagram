@@ -7,7 +7,7 @@
 #library(devtools)
 #devtools::install_github("diegovalle/mxmaps")
 
-#library(leaflet)
+library(leaflet)
 library(deldir)
 library(tidyverse)
 library(rgdal)
@@ -18,15 +18,48 @@ library(ggforce)
 library(plyr)
 library(dplyr)
 
-search()
-
 getwd()
 setwd('~/Dropbox/JANO/2017/Conabio/Mercados_Mexico/AllData/')
-#source("lib/latlong2state.R")
-getwd()
-dir()
 
-#library(maptools)
+
+########################
+########################
+
+#Para poner el voronoi en leaflet
+#Código de https://rud.is/b/2015/07/26/making-staticinteractive-voronoi-map-layers-in-ggplotleaflet/
+
+
+SPointsDF_to_voronoi_SPolysDF <- function(sp) {
+  
+  # tile.list extracts the polygon data from the deldir computation
+  vor_desc <- tile.list(deldir(sp@coords[,1], sp@coords[,2]))
+  
+  lapply(1:(length(vor_desc)), function(i) {
+    
+    # tile.list gets us the points for the polygons but we
+    # still have to close them, hence the need for the rbind
+    tmp <- cbind(vor_desc[[i]]$x, vor_desc[[i]]$y)
+    tmp <- rbind(tmp, tmp[1,])
+    
+    # now we can make the Polygon(s)
+    Polygons(list(Polygon(tmp)), ID = i)
+    
+  }) -> vor_polygons
+  
+  # hopefully the caller passed in good metadata!
+  sp_dat <- sp@data
+  
+  # this way the IDs _should_ match up w/the data & voronoi polys
+  rownames(sp_dat) <- sapply(slot(SpatialPolygons(vor_polygons),
+                                  'polygons'),
+                             slot, 'ID')
+  
+  SpatialPolygonsDataFrame(SpatialPolygons(vor_polygons),
+                           data = sp_dat)
+}
+
+########################
+########################
 
 #Cargar mapa de Mexico
 mapregio <- readOGR("data/destdv250k_2gw/destdv250k_2gw.shp")
@@ -85,8 +118,8 @@ names(Mex)
 names(Mex)[7:8] <- c("lng", "lat")
 names(Mex)[7:8]
 
-
-target1 <- c("Distrito Federal", "Mexico")
+#Aqui escojo el estado
+target1 <- c("Oaxaca")
 
 Mex2 <- Mex %>%
   select(CVE_EDO, CVE_MUN, CVE_LOC, lng, lat, NOM_MUN, NOM_LOC, NOM_ENT) %>%
@@ -158,7 +191,7 @@ Edo31 <- read.delim("RESLOC2014 - 31 Yucatan.csv"  , header = T, sep = ",")
 Edo32 <- read.delim("RESLOC2014 - 32 Zacatecas.csv"  , header = T, sep = ",")
 
 
-Edo <- bind_rows(Edo09, Edo15)
+Edo <- bind_rows(Edo20)
 summary(Edo)
 names(Edo)
 
@@ -248,69 +281,43 @@ ggplot(TianguisFF, aes(lng, lat)) +
   geom_voronoi_segment() 
 
 
-#vtess1 <- tile.list(vtess)
-#plot(vtess1)
-#plot(vtess1,fillcol = FF1,close = T, number = F, cex = 0.3)
-
-
 #Now we can make a plot
-head(TianguisFF)
-summary(TianguisFF)
-names(Maiz1)
-ggplot(data = TianguisFF, aes(x = lng,y = lat)) +
-  geom_point() + 
-  theme_bw() +
-  #Plot the voronoi lines
-  geom_segment(aes(x = x1, y = y1, xend = x2, yend = y2),
-    size = 0.2,
-    data = vtess$dirsgs,
-    linetype = 1,
-    color = "black") 
-  #Plot the points
+# ggplot(data = TianguisFF, aes(x = lng,y = lat)) +
+#  geom_point() + 
+#  theme_bw() +
+#  #Plot the voronoi lines
+#  geom_segment(aes(x = x1, y = y1, xend = x2, yend = y2),
+#    size = 0.2,
+#    data = vtess$dirsgs,
+#    linetype = 1,
+#    color = "black") 
+#  #Plot the points
   
-#head(Maiz1)
-#dim(Maiz1)
 
-#head(vtess$summary)
-#dim(vtess$summary)
-#dim(Maiz1)
-#MaizZZ <- data.frame(Maiz1[,3:4], vtess$summary$dir.area)
-#tileplot(z1~x*y, MaizZZ)
-
-head(TianguisFF)
-
-head(shapefile_df)
-summary(shapefile_df)
-
-summary(shapefile_df$group)
 #shapefile_df1 <- shapefile_df[shapefile_df$group == "1.1",]
 
 shapefile_df1 <- shapefile_df
-  
 shapefile_df1 <- shapefile_df %>%
   filter(group %in% target1)
-
 shapefile_df1
 
-dim(vtess$dirsgs)
-dim(TianguisFF)
-map <- ggplot(data = TianguisFF, aes(x = lng,y = lat)) +
-  geom_point() + 
-  #geom_point(aes(colour = Raza_primaria)) + 
-  #geom_point(aes(colour = Altitud)) + 
-  theme_bw() +
-  #Plot the voronoi lines
-  geom_segment(aes(x = x1, y = y1, xend = x2, yend = y2),
-               size = 0.2,
-               data = vtess$dirsgs,
-               linetype = 1,
-               color = "#080530") + 
-  geom_path(data = shapefile_df1, 
-            aes(x = long, y = lat, group = group),
-            color = 'gray', size = 0.2) + 
-  theme_bw()
-
-print(map)
+# map <- ggplot(data = TianguisFF, aes(x = lng,y = lat)) +
+#  geom_point() + 
+#  #geom_point(aes(colour = Raza_primaria)) + 
+#  #geom_point(aes(colour = Altitud)) + 
+#  theme_bw() +
+#  #Plot the voronoi lines
+#  geom_segment(aes(x = x1, y = y1, xend = x2, yend = y2),
+#               size = 0.2,
+#               data = vtess$dirsgs,
+#               linetype = 1,
+#               color = "#080530") + 
+#  geom_path(data = shapefile_df1, 
+#            aes(x = long, y = lat, group = group),
+#            color = 'gray', size = 0.2) + 
+#  theme_bw()
+#
+#  print(map)
 
 #ggplotly(map)
 
@@ -386,12 +393,93 @@ ggplot(TianguisFF, aes(lng, lat)) +
   
 
 
-#ggplot() +
-#  geom_map(data = vor_df, map = vor_df,aes(x = long, y = lat, map_id = id, fill = id), size=0.25) +
-#  geom_path(data = vor_df,aes(x = long, y = lat, map = id)) +
-#  geom_point(data = dati, aes(x, y),shape = 21, color = "white", fill = "steelblue")
+dir()
+search()
+ls()
+
+
+dim(TianguisFF)
+TianguisFF1 <- TianguisFF %>%
+  mutate(Tipo = "Mercado")
+head(TianguisFF1)
+
+head(TianguisHH)
+TianguisHH1 <- TianguisHH %>%
+  mutate(Tipo = "Maíz")
+
+FinalTT <- bind_rows(TianguisFF1, TianguisHH1)
+
+dim(TianguisHH)
 
 
 
+head(FinalTT)
+leaflet(data = FinalTT) %>% 
+  addTiles() %>%
+  addCircleMarkers(~lng, ~lat, radius = 2, col = "black",
+                   popup = paste(sep = " ","Municipio:",TianguisFF$NOM_MUN,
+                                 "<br/>","Localidad:",TianguisFF$NOM_LOC),
+                   clusterOptions = markerClusterOptions(showCoverageOnHover = T, 
+                                                         spiderfyOnMaxZoom = T,
+                                                         zoomToBoundsOnClick = T,
+                                                         spiderfyDistanceMultiplier = 2)) %>%
+  #Select the kind of map: http://leaflet-extras.github.io/leaflet-providers/preview/
+  addProviderTiles("OpenStreetMap.DE")
+#addProviderTiles("Thunderforest.Pioneer")
 
 
+head(FinalTT)
+summary(FinalTT)
+FinalTT$Tipo
+pal <- colorFactor(c("navy", "red"), domain = c("Mercado", "Maíz"))
+
+
+leaflet(data = FinalTT) %>% 
+  addTiles() %>%
+  addCircleMarkers(~lng, ~lat, 
+                   popup = paste(sep = " ","Municipio:",FinalTT$NOM_MUN,
+                                 "<br/>","Localidad:",FinalTT$NOM_LOC),
+                   radius = ~ifelse(Tipo == "Maíz", 6, 10),
+                   color = ~pal(Tipo),
+                   stroke = FALSE, fillOpacity = 0.5) %>%
+  #Select the kind of map: http://leaflet-extras.github.io/leaflet-providers/preview/
+  addProviderTiles("OpenStreetMap.DE")
+#addProviderTiles("Thunderforest.Pioneer")
+
+
+
+head(TianguisFF[,6:7])
+
+vor_pts <- SpatialPointsDataFrame(cbind(TianguisFF$lng,
+                                        TianguisFF$lat),
+                                  TianguisFF, match.ID = TRUE)
+
+vor <- SPointsDF_to_voronoi_SPolysDF(vor_pts)
+vor
+head(vor)
+class(vor)
+class(vor_df)
+
+summary(vor)
+
+
+leaflet(data = FinalTT) %>% 
+#  addTiles() %>%
+  addProviderTiles("OpenStreetMap.DE") %>%
+  #Select the kind of map: http://leaflet-extras.github.io/leaflet-providers/preview/
+  # voronoi (click) layer
+  addPolygons(data = vor,
+              stroke = T, color = "red", weight = 2,
+              fill = F, fillOpacity = 0.0,
+              smoothFactor = 0.5
+              #popup = sprintf("Total In/Out: %s",
+              #              as.character(vor@data$tot))
+              ) %>%
+  addCircleMarkers(~lng, ~lat, 
+                   popup = paste(sep = " ","Municipio:",FinalTT$NOM_MUN,
+                                 "<br/>","Localidad:",FinalTT$NOM_LOC),
+                   radius = ~ifelse(Tipo == "Maíz", 6, 10),
+                   color = ~pal(Tipo),
+                   stroke = F, fillOpacity = 0.5)
+  
+#addProviderTiles("Thunderforest.Pioneer")
